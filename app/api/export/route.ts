@@ -9,7 +9,7 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Get latest update per building × floor × room × discipline × activity
+  // Only export rows that have actual updates
   const { rows } = await query(`
     SELECT
       b.name AS building,
@@ -17,20 +17,21 @@ export async function GET() {
       r.name AS room,
       d.name AS discipline,
       a.name AS activity,
-      COALESCE(latest.status, 'notstarted') AS status,
-      COALESCE(latest.progress, 0) AS progress,
-      COALESCE(latest.remarks, '') AS remarks
-    FROM disciplines d
-    JOIN activities a ON a.discipline_id = d.id
-    CROSS JOIN buildings b
-    JOIN floors f ON f.building_id = b.id
-    JOIN rooms r ON r.floor_id = f.id
-    LEFT JOIN LATERAL (
-      SELECT u.status, u.progress, u.remarks FROM updates u
-      WHERE u.activity_id = a.id AND u.building_id = b.id
-        AND u.floor_id = f.id AND u.room_id = r.id
-      ORDER BY u.created_at DESC LIMIT 1
-    ) latest ON true
+      u.status,
+      u.progress,
+      COALESCE(u.remarks, '') AS remarks
+    FROM (
+      SELECT DISTINCT ON (activity_id, building_id, floor_id, room_id)
+        activity_id, building_id, floor_id, room_id, discipline_id,
+        status, progress, remarks
+      FROM updates
+      ORDER BY activity_id, building_id, floor_id, room_id, created_at DESC
+    ) u
+    JOIN buildings b ON b.id = u.building_id
+    JOIN floors f ON f.id = u.floor_id
+    JOIN rooms r ON r.id = u.room_id
+    JOIN disciplines d ON d.id = u.discipline_id
+    JOIN activities a ON a.id = u.activity_id
     ORDER BY b.name, f.floor_number, r.id, d.id, a.id
   `);
 

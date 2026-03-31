@@ -12,6 +12,9 @@ export function getPool(): Pool {
     global.__pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
     });
   }
   return global.__pool;
@@ -120,9 +123,9 @@ async function seedData() {
   };
 
   for (const [disc, acts] of Object.entries(activitiesMap)) {
-    for (const act of acts) {
-      await query('INSERT INTO activities (discipline_id, name) VALUES ($1, $2)', [disciplineIds[disc], act]);
-    }
+    const vals = acts.map((a, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(',');
+    const params = acts.flatMap(a => [disciplineIds[disc], a]);
+    await query(`INSERT INTO activities (discipline_id, name) VALUES ${vals}`, params);
   }
 
   const engineers = [
@@ -167,8 +170,11 @@ async function seedData() {
       );
       const fId = fRows[0].id;
 
-      for (const room of floorMap[floorName]) {
-        await query('INSERT INTO rooms (floor_id, name) VALUES ($1, $2)', [fId, room]);
+      const rooms = floorMap[floorName];
+      if (rooms.length > 0) {
+        const vals = rooms.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(',');
+        const params = rooms.flatMap(r => [fId, r]);
+        await query(`INSERT INTO rooms (floor_id, name) VALUES ${vals}`, params);
       }
     }
   }
