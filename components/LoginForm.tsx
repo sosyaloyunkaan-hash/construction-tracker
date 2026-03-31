@@ -1,23 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-const ENGINEERS = [
-  'Ahmed Al Mansouri',
-  'Sara Khalid',
-  'Khalid Ibrahim',
-  'Fatima Al Zahra',
-  'Omar Saeed',
-];
 
 export default function LoginForm() {
   const router = useRouter();
+  const [engineers, setEngineers] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/engineers').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setEngineers(data.map((e: { name: string }) => e.name));
+    });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +68,7 @@ export default function LoginForm() {
               className="w-full px-3 py-3 border border-slate-200 rounded-xl text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none"
             >
               <option value="">— Choose engineer —</option>
-              {ENGINEERS.map(eng => (
+              {engineers.map(eng => (
                 <option key={eng} value={eng}>{eng}</option>
               ))}
             </select>
