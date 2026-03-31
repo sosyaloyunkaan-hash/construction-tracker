@@ -473,11 +473,24 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                 </div>
               </div>
 
-              {/* Progress slider */}
+              {/* Progress slider + manual input */}
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Progress</label>
-                  <span className={`text-lg font-bold ${STATUS_CONFIG[status].text}`}>{progress}%</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={progress}
+                      onChange={e => {
+                        const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                        handleProgressChange(isNaN(val) ? 0 : val);
+                      }}
+                      className={`w-16 text-center text-lg font-bold border-2 rounded-lg py-0.5 focus:outline-none focus:border-amber-400 ${STATUS_CONFIG[status].text} border-slate-200`}
+                    />
+                    <span className={`text-lg font-bold ${STATUS_CONFIG[status].text}`}>%</span>
+                  </div>
                 </div>
                 <div className="relative">
                   <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-1.5">
