@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
+import { ROOM_DATA } from './roomData';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -87,6 +88,8 @@ export async function initDB() {
   }
 }
 
+const FLOOR_ORDER = ['Ground', 'Podium 1', 'Podium 2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'Roof'];
+
 async function seedData() {
   const disciplineNames = ['MEP', 'Finishing', 'Civil', 'External Works'];
   const disciplineIds: Record<string, number> = {};
@@ -141,30 +144,31 @@ async function seedData() {
     }
   }
 
-  const floorRooms: Record<number, string[]> = {
-    1:  ['Lobby', 'Reception', 'Security Room', 'Electrical Room', 'Pump Room', 'Storage', 'Toilet M', 'Toilet F'],
-    2:  ['Office 201', 'Office 202', 'Office 203', 'Meeting Room 2A', 'Pantry', 'Toilet M', 'Toilet F'],
-    3:  ['Office 301', 'Office 302', 'Office 303', 'Office 304', 'Meeting Room 3A', 'Pantry', 'Toilet M', 'Toilet F'],
-    4:  ['Office 401', 'Office 402', 'Office 403', 'Office 404', 'Meeting Room 4A', 'Pantry', 'Toilet M', 'Toilet F'],
-    5:  ['Office 501', 'Office 502', 'Office 503', 'Conference Room', 'Prayer Room', 'Pantry', 'Toilet M', 'Toilet F'],
-    6:  ['Office 601', 'Office 602', 'Office 603', 'Office 604', 'Meeting Room 6A', 'Pantry', 'Toilet M', 'Toilet F'],
-    7:  ['Office 701', 'Office 702', 'Office 703', 'Office 704', 'Meeting Room 7A', 'Pantry', 'Toilet M', 'Toilet F'],
-    8:  ['Office 801', 'Office 802', 'Server Room', 'IT Room', 'Pantry', 'Toilet M', 'Toilet F'],
-    9:  ['Office 901', 'Office 902', 'Executive Office', 'Board Room', 'Lounge', 'Pantry', 'Toilet M', 'Toilet F'],
-    10: ['Rooftop Plant Room', 'AHU Room', 'Cooling Tower', 'Lift Motor Room', 'Water Tank Room'],
-  };
-
-  for (const bldg of ['Building A', 'Building B', 'Building C', 'Building D']) {
-    const { rows: bRows } = await query('INSERT INTO buildings (name) VALUES ($1) RETURNING id', [bldg]);
+  // Insert buildings, floors, rooms from CSV data
+  for (const buildingName of Object.keys(ROOM_DATA).sort()) {
+    const { rows: bRows } = await query(
+      'INSERT INTO buildings (name) VALUES ($1) RETURNING id',
+      [buildingName]
+    );
     const bId = bRows[0].id;
-    for (let fn = 1; fn <= 10; fn++) {
-      const floorName = fn === 1 ? 'Ground Floor' : `Floor ${fn}`;
+
+    const floorMap = ROOM_DATA[buildingName];
+    const floors = Object.keys(floorMap).sort((a, b) => {
+      const ai = FLOOR_ORDER.indexOf(a);
+      const bi = FLOOR_ORDER.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    for (let fi = 0; fi < floors.length; fi++) {
+      const floorName = floors[fi];
       const { rows: fRows } = await query(
         'INSERT INTO floors (building_id, floor_number, name) VALUES ($1, $2, $3) RETURNING id',
-        [bId, fn, floorName]
+        [bId, fi + 1, floorName]
       );
-      for (const room of floorRooms[fn]) {
-        await query('INSERT INTO rooms (floor_id, name) VALUES ($1, $2)', [fRows[0].id, room]);
+      const fId = fRows[0].id;
+
+      for (const room of floorMap[floorName]) {
+        await query('INSERT INTO rooms (floor_id, name) VALUES ($1, $2)', [fId, room]);
       }
     }
   }
