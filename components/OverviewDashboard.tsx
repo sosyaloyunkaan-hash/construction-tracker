@@ -70,6 +70,7 @@ interface Props { refreshTrigger: number }
 export default function OverviewDashboard({ refreshTrigger }: Props) {
   const [data, setData] = useState<DisciplineData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [activeDisc, setActiveDisc] = useState(0);
   const [expandedActivities, setExpandedActivities] = useState<Record<number, boolean>>({});
   const [expandedBuildings, setExpandedBuildings] = useState<Record<string, boolean>>({});
@@ -87,6 +88,23 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
 
   useEffect(() => { fetchData(); }, [fetchData, refreshTrigger]);
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/export');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const today = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `site-progress-${today}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (loading) return (
     <div className="flex justify-center py-16">
       <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -103,6 +121,25 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
 
   return (
     <div className="max-w-lg mx-auto">
+
+      {/* Export button */}
+      <div className="flex justify-end mb-3">
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-60"
+        >
+          {exporting ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          )}
+          {exporting ? 'Exporting…' : 'Export to Excel'}
+        </button>
+      </div>
 
       {/* Discipline tabs */}
       <div className="flex bg-white rounded-2xl shadow-sm border border-slate-100 mb-4 overflow-hidden">
