@@ -79,7 +79,7 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/dashboard', { cache: 'no-store' });
+      const res = await fetch(`/api/dashboard?t=${Date.now()}`, { cache: 'no-store' });
       setData(await res.json());
     } finally {
       setLoading(false);
@@ -122,8 +122,18 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
   return (
     <div className="max-w-lg mx-auto">
 
-      {/* Export button */}
-      <div className="flex justify-end mb-3">
+      {/* Toolbar */}
+      <div className="flex justify-end gap-2 mb-3">
+        <button
+          onClick={fetchData}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+        >
+          <svg className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh
+        </button>
         <button
           onClick={handleExport}
           disabled={exporting}
@@ -139,7 +149,7 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
           )}
           {exporting ? 'Exporting…' : 'Export to Excel'}
         </button>
-      </div>
+      </div> {/* end toolbar */}
 
       {/* Discipline tabs */}
       <div className="flex bg-white rounded-2xl shadow-sm border border-slate-100 mb-4 overflow-hidden">

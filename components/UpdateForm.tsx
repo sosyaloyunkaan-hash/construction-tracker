@@ -125,6 +125,12 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
     const data = await res.json();
     setLatestUpdate(data);
     setLatestFetched(true);
+    // Pre-populate form with latest values
+    if (data) {
+      setProgress(data.progress);
+      setIsHold(data.status === 'hold');
+      setRemarks(data.remarks || '');
+    }
   }, [buildingId, floorId, roomId, disciplineId, activityId]);
 
   useEffect(() => {
@@ -168,7 +174,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
   function selectActivity(id: number) {
     setActivityId(id);
     setLatestFetched(false);
-    setProgress(0); setIsHold(false); setRemarks('');
+    setProgress(0); setIsHold(false); setRemarks(''); // will be overwritten by fetchLatest if update exists
     setStep(6);
   }
 
