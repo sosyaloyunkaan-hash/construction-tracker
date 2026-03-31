@@ -132,6 +132,7 @@ async function seedData() {
     { name: 'Ahmed Al Mansouri', password: 'ahmed123', initials: 'AA', color: '#0EA5E9', disciplines: ['MEP'] },
     { name: 'Sara Khalid',       password: 'sara123',  initials: 'SK', color: '#EC4899', disciplines: ['Finishing'] },
     { name: 'Khalid Ibrahim',    password: 'khalid123', initials: 'KI', color: '#F97316', disciplines: ['Civil'] },
+    { name: 'Kaan Ekinci',    password: 'kaan123', initials: 'KE', color: '#F97316', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
     { name: 'Fatima Al Zahra',   password: 'fatima123', initials: 'FA', color: '#8B5CF6', disciplines: ['MEP', 'Finishing'] },
     { name: 'Omar Saeed',        password: 'omar123',   initials: 'OS', color: '#22C55E', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
   ];
