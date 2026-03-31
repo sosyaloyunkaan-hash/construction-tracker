@@ -6,6 +6,7 @@ import UpdateForm from './UpdateForm';
 import UpdateLog from './UpdateLog';
 import OverviewDashboard from './OverviewDashboard';
 
+
 interface Engineer {
   id: number;
   name: string;
@@ -20,7 +21,7 @@ interface Props {
 
 export default function Dashboard({ user }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'update' | 'log' | 'overview'>('update');
+  const [activeTab, setActiveTab] = useState<'update' | 'log' | 'summary'>('update');
   const [engineer, setEngineer] = useState<Engineer | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -98,12 +99,12 @@ export default function Dashboard({ user }: Props) {
             Log
           </button>
           <button
-            onClick={() => setActiveTab('overview')}
+            onClick={() => setActiveTab('summary')}
             className={`flex-1 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
-              activeTab === 'overview' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-400 hover:text-slate-300'
+              activeTab === 'summary' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-400 hover:text-slate-300'
             }`}
           >
-            Overview
+            Summary
           </button>
         </div>
       </header>
@@ -120,7 +121,8 @@ export default function Dashboard({ user }: Props) {
           <UpdateLog refreshTrigger={refreshKey} />
         ) : (
           <OverviewDashboard refreshTrigger={refreshKey} />
-        )}
+        )
+        }
       </main>
     </div>
   );
