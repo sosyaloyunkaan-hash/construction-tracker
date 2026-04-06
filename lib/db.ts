@@ -88,6 +88,54 @@ export async function initDB() {
   const { rows } = await query('SELECT COUNT(*) FROM engineers');
   if (parseInt(rows[0].count) === 0) {
     await seedData();
+  } else {
+    await migrateUsers();
+  }
+}
+
+async function migrateUsers() {
+  const keepUsers = [
+    { name: 'Kaan Ekinci', password: 'Kaan321456', initials: 'KE', color: '#0EA5E9' },
+    { name: 'Eren',        password: 'Eren321456', initials: 'ER', color: '#22C55E' },
+  ];
+
+  // Remove engineers not in the keep list
+  const keepNames = keepUsers.map(u => u.name);
+  const { rows: allEngineers } = await query('SELECT id, name FROM engineers');
+  for (const eng of allEngineers) {
+    if (!keepNames.includes(eng.name)) {
+      await query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [eng.id]);
+      await query('DELETE FROM engineers WHERE id = $1', [eng.id]);
+    }
+  }
+
+  // Get all discipline IDs
+  const { rows: disciplines } = await query('SELECT id FROM disciplines');
+  const allDisciplineIds = disciplines.map((d: { id: number }) => d.id);
+
+  // Upsert each keep user
+  for (const user of keepUsers) {
+    const hash = bcrypt.hashSync(user.password, 10);
+    const { rows: existing } = await query('SELECT id FROM engineers WHERE name = $1', [user.name]);
+    let engineerId: number;
+    if (existing.length > 0) {
+      engineerId = existing[0].id;
+      await query(
+        'UPDATE engineers SET password = $1, initials = $2, avatar_color = $3 WHERE id = $4',
+        [hash, user.initials, user.color, engineerId]
+      );
+    } else {
+      const { rows } = await query(
+        'INSERT INTO engineers (name, password, initials, avatar_color) VALUES ($1, $2, $3, $4) RETURNING id',
+        [user.name, hash, user.initials, user.color]
+      );
+      engineerId = rows[0].id;
+    }
+    // Assign all disciplines
+    await query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [engineerId]);
+    for (const discId of allDisciplineIds) {
+      await query('INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ($1, $2)', [engineerId, discId]);
+    }
   }
 }
 
@@ -129,12 +177,8 @@ async function seedData() {
   }
 
   const engineers = [
-    { name: 'Ahmed Al Mansouri', password: 'ahmed123', initials: 'AA', color: '#0EA5E9', disciplines: ['MEP'] },
-    { name: 'Sara Khalid',       password: 'sara123',  initials: 'SK', color: '#EC4899', disciplines: ['Finishing'] },
-    { name: 'Khalid Ibrahim',    password: 'khalid123', initials: 'KI', color: '#F97316', disciplines: ['Civil'] },
-    { name: 'Kaan Ekinci',    password: 'kaan123', initials: 'KE', color: '#F97316', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
-    { name: 'Fatima Al Zahra',   password: 'fatima123', initials: 'FA', color: '#8B5CF6', disciplines: ['MEP', 'Finishing'] },
-    { name: 'Omar Saeed',        password: 'omar123',   initials: 'OS', color: '#22C55E', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
+    { name: 'Kaan Ekinci', password: 'Kaan321456', initials: 'KE', color: '#0EA5E9', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
+    { name: 'Eren',        password: 'Eren321456', initials: 'ER', color: '#22C55E', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
   ];
 
   for (const eng of engineers) {
