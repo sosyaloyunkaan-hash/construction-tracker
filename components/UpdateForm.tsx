@@ -81,7 +81,6 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
   const [progress, setProgress] = useState(0);
   const [isHold, setIsHold] = useState(false);
-  const [remarks, setRemarks] = useState('');
 
   const [latestUpdate, setLatestUpdate] = useState<UpdateRecord | null>(null);
   const [latestFetched, setLatestFetched] = useState(false);
@@ -130,7 +129,6 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
     if (data) {
       setProgress(data.progress);
       setIsHold(data.status === 'hold');
-      setRemarks(data.remarks || '');
     }
   }, [buildingId, floorId, roomId, disciplineId, activityId]);
 
@@ -175,7 +173,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
   function selectActivity(id: number) {
     setActivityId(id);
     setLatestFetched(false);
-    setProgress(0); setIsHold(false); setRemarks(''); // will be overwritten by fetchLatest if update exists
+    setProgress(0); setIsHold(false); // will be overwritten by fetchLatest if update exists
     setStep(6);
   }
 
@@ -192,7 +190,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
       const res = await fetch('/api/updates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ buildingId, floorId, roomId, disciplineId, activityId, progress, isHold, remarks }),
+        body: JSON.stringify({ buildingId, floorId, roomId, disciplineId, activityId, progress, isHold, remarks: '' }),
       });
       if (res.ok) {
         const newUpdate = await res.json();
@@ -215,7 +213,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
     setStep(1);
     setBuildingId(null); setFloorId(null); setRoomId(null);
     setDisciplineId(null); setActivityId(null);
-    setProgress(0); setIsHold(false); setRemarks('');
+    setProgress(0); setIsHold(false);
     setLatestUpdate(null); setLatestFetched(false);
     setSubmitSuccess(false);
   }
@@ -437,26 +435,11 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                     </div>
                     <span className="text-sm font-bold text-slate-700 w-10 text-right">{latestUpdate.progress}%</span>
                   </div>
-                  {latestUpdate.remarks && (
-                    <p className="text-xs text-slate-500 mt-2 italic">&ldquo;{latestUpdate.remarks}&rdquo;</p>
-                  )}
                 </div>
               ) : (
                 <p className="text-sm text-slate-400 italic">No previous update recorded for this activity.</p>
               )}
             </div>
-          )}
-
-          {/* Update form */}
-          {/* Comments thread */}
-          {buildingId && floorId && roomId && activityId && (
-            <CommentsThread
-              buildingId={buildingId}
-              floorId={floorId}
-              roomId={roomId}
-              activityId={activityId}
-              currentUser={engineer}
-            />
           )}
 
           {!disciplineUnauthorized && (
@@ -536,20 +519,6 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                 </div>
               </div>
 
-              {/* Remarks */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Remarks <span className="font-normal text-slate-400">(optional)</span>
-                </label>
-                <textarea
-                  value={remarks}
-                  onChange={e => setRemarks(e.target.value)}
-                  rows={3}
-                  placeholder="Add any notes or remarks…"
-                  className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
-                />
-              </div>
-
               {submitError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2.5 rounded-lg">
                   {submitError}
@@ -582,6 +551,17 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                 </button>
               </div>
             </form>
+          )}
+
+          {/* Comments thread — always visible at bottom of step 6 */}
+          {buildingId && floorId && roomId && activityId && (
+            <CommentsThread
+              buildingId={buildingId}
+              floorId={floorId}
+              roomId={roomId}
+              activityId={activityId}
+              currentUser={engineer}
+            />
           )}
         </div>
       )}

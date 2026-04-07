@@ -35,7 +35,7 @@ export default function CommentsThread({ buildingId, floorId, roomId, activityId
   const [loading, setLoading]     = useState(true);
   const [message, setMessage]     = useState('');
   const [sending, setSending]     = useState(false);
-  const [open, setOpen]           = useState(false);
+  const [open, setOpen]           = useState(true);
   const bottomRef                 = useRef<HTMLDivElement>(null);
 
   async function fetchComments() {
