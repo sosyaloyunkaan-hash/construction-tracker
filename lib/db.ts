@@ -104,6 +104,7 @@ async function migrateUsers() {
   const { rows: allEngineers } = await query('SELECT id, name FROM engineers');
   for (const eng of allEngineers) {
     if (!keepNames.includes(eng.name)) {
+      await query('DELETE FROM updates WHERE engineer_id = $1', [eng.id]);
       await query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [eng.id]);
       await query('DELETE FROM engineers WHERE id = $1', [eng.id]);
     }
