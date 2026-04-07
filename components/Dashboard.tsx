@@ -6,6 +6,7 @@ import UpdateForm from './UpdateForm';
 import UpdateLog from './UpdateLog';
 import OverviewDashboard from './OverviewDashboard';
 import BulkUpdateForm from './BulkUpdateForm';
+import DiscussionView from './DiscussionView';
 import { useTheme } from '@/lib/ThemeContext';
 
 interface Engineer {
@@ -23,7 +24,7 @@ interface Props {
 export default function Dashboard({ user }: Props) {
   const router = useRouter();
   const { theme, toggle } = useTheme();
-  const [activeTab, setActiveTab] = useState<'update' | 'bulk' | 'log' | 'summary'>('update');
+  const [activeTab, setActiveTab] = useState<'update' | 'bulk' | 'log' | 'summary' | 'discuss'>('update');
   const [engineer, setEngineer] = useState<Engineer | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -110,10 +111,11 @@ export default function Dashboard({ user }: Props) {
 
         {/* Tabs */}
         <div className="max-w-lg mx-auto px-4 flex border-t border-slate-800">
-          <button onClick={() => setActiveTab('update')} className={tabCls('update')}>Update</button>
-          <button onClick={() => setActiveTab('bulk')}   className={tabCls('bulk')}>Bulk</button>
-          <button onClick={() => setActiveTab('log')}    className={tabCls('log')}>Log</button>
+          <button onClick={() => setActiveTab('update')}  className={tabCls('update')}>Update</button>
+          <button onClick={() => setActiveTab('bulk')}    className={tabCls('bulk')}>Bulk</button>
+          <button onClick={() => setActiveTab('log')}     className={tabCls('log')}>Log</button>
           <button onClick={() => setActiveTab('summary')} className={tabCls('summary')}>Summary</button>
+          <button onClick={() => setActiveTab('discuss')} className={tabCls('discuss')}>Discuss</button>
         </div>
       </header>
 
@@ -129,6 +131,8 @@ export default function Dashboard({ user }: Props) {
           <BulkUpdateForm engineer={engineer} onUpdateSubmitted={handleUpdateSubmitted} />
         ) : activeTab === 'log' ? (
           <UpdateLog refreshTrigger={refreshKey} />
+        ) : activeTab === 'discuss' ? (
+          <DiscussionView currentUser={engineer} />
         ) : (
           <OverviewDashboard refreshTrigger={refreshKey} />
         )}
