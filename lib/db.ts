@@ -88,8 +88,6 @@ export async function initDB() {
   const { rows } = await query('SELECT COUNT(*) FROM engineers');
   if (parseInt(rows[0].count) === 0) {
     await seedData();
-  } else {
-    await migrateUsers();
   }
 }
 
