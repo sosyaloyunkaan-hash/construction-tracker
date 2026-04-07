@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 
 /* ── Discipline-wise types ── */
 interface RoomData {
@@ -246,7 +246,7 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h2 className="text-base font-bold text-slate-800">{discipline.discipline_name}</h2>
-                    <p className="text-xs text-slate-400">{total} activities · 4 buildings · 10 floors</p>
+                    <p className="text-xs text-slate-400">{total} activities · {discipline.activities[0]?.buildings?.length ?? 0} buildings</p>
                   </div>
                   <span className={`text-2xl font-black ${textColor(discAvg)}`}>{discAvg}%</span>
                 </div>

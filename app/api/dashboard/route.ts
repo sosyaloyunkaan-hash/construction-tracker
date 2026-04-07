@@ -8,97 +8,100 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Fetch all static data separately (no cross join)
-  const [discRows, buildRows, floorRows, roomRows, updateRows] = await Promise.all([
-    query(`SELECT d.id AS discipline_id, d.name AS discipline_name,
-                  a.id AS activity_id, a.name AS activity_name
-           FROM disciplines d JOIN activities a ON a.discipline_id = d.id
-           ORDER BY d.id, a.id`),
-    query(`SELECT * FROM buildings ORDER BY name`),
-    query(`SELECT * FROM floors ORDER BY building_id, floor_number`),
-    query(`SELECT * FROM rooms ORDER BY floor_id, id`),
-    // Only latest update per unique combination
-    query(`SELECT DISTINCT ON (activity_id, building_id, floor_id, room_id)
-             activity_id, building_id, floor_id, room_id, progress, status
-           FROM updates
-           ORDER BY activity_id, building_id, floor_id, room_id, created_at DESC`),
+  // Single query: aggregate progress per (discipline, activity, building, floor) in DB
+  const [discActRows, buildRows, floorRows, roomCountRows, updateRows] = await Promise.all([
+    query(`
+      SELECT d.id AS discipline_id, d.name AS discipline_name,
+             a.id AS activity_id, a.name AS activity_name
+      FROM disciplines d JOIN activities a ON a.discipline_id = d.id
+      ORDER BY d.id, a.id
+    `),
+    query(`SELECT id, name FROM buildings ORDER BY name`),
+    query(`SELECT id, building_id, floor_number, name FROM floors ORDER BY building_id, floor_number`),
+    // Total rooms per floor
+    query(`SELECT floor_id, COUNT(*) AS total FROM rooms GROUP BY floor_id`),
+    // Latest update per (activity, building, floor, room) — aggregated to floor level
+    query(`
+      WITH latest AS (
+        SELECT DISTINCT ON (activity_id, building_id, floor_id, room_id)
+          activity_id, building_id, floor_id, room_id, progress, status
+        FROM updates
+        ORDER BY activity_id, building_id, floor_id, room_id, created_at DESC
+      )
+      SELECT activity_id, building_id, floor_id,
+             COUNT(*) AS updated_rooms,
+             ROUND(AVG(progress)) AS floor_progress
+      FROM latest
+      GROUP BY activity_id, building_id, floor_id
+    `),
   ]);
 
-  // Index updates for fast lookup
-  const updateIndex: Record<string, { progress: number; status: string }> = {};
-  for (const u of updateRows.rows) {
-    updateIndex[`${u.activity_id}-${u.building_id}-${u.floor_id}-${u.room_id}`] = {
-      progress: parseInt(u.progress),
-      status: u.status,
-    };
-  }
+  // Build indexes
+  const totalRoomsByFloor: Record<number, number> = {};
+  for (const r of roomCountRows.rows) totalRoomsByFloor[r.floor_id] = parseInt(r.total);
 
-  // Index floors by building, rooms by floor
   const floorsByBuilding: Record<number, typeof floorRows.rows> = {};
   for (const f of floorRows.rows) {
     if (!floorsByBuilding[f.building_id]) floorsByBuilding[f.building_id] = [];
     floorsByBuilding[f.building_id].push(f);
   }
 
-  const roomsByFloor: Record<number, typeof roomRows.rows> = {};
-  for (const r of roomRows.rows) {
-    if (!roomsByFloor[r.floor_id]) roomsByFloor[r.floor_id] = [];
-    roomsByFloor[r.floor_id].push(r);
+  // Index: activity_id -> building_id -> floor_id -> { updated_rooms, floor_progress }
+  type FloorStat = { updated_rooms: number; floor_progress: number };
+  const statIndex: Record<number, Record<number, Record<number, FloorStat>>> = {};
+  for (const r of updateRows.rows) {
+    const aId = r.activity_id, bId = r.building_id, fId = r.floor_id;
+    if (!statIndex[aId]) statIndex[aId] = {};
+    if (!statIndex[aId][bId]) statIndex[aId][bId] = {};
+    statIndex[aId][bId][fId] = {
+      updated_rooms: parseInt(r.updated_rooms),
+      floor_progress: parseInt(r.floor_progress),
+    };
   }
 
-  // Group activities by discipline
-  const discMap: Record<number, { discipline_id: number; discipline_name: string; activities: any[] }> = {};
-  for (const row of discRows.rows) {
+  // Assemble response
+  const discMap: Record<number, { discipline_id: number; discipline_name: string; activities: unknown[] }> = {};
+
+  for (const row of discActRows.rows) {
     if (!discMap[row.discipline_id]) {
-      discMap[row.discipline_id] = { discipline_id: row.discipline_id, discipline_name: row.discipline_name, activities: [] };
+      discMap[row.discipline_id] = {
+        discipline_id: row.discipline_id,
+        discipline_name: row.discipline_name,
+        activities: [],
+      };
     }
 
     const buildings = buildRows.rows.map(b => {
       const floors = (floorsByBuilding[b.id] || []).map(f => {
-        const rooms = (roomsByFloor[f.id] || []).map(r => {
-          const key = `${row.activity_id}-${b.id}-${f.id}-${r.id}`;
-          const upd = updateIndex[key];
-          return {
-            room_id: r.id,
-            room_name: r.name,
-            room_progress: upd?.progress ?? 0,
-            room_status: upd?.status ?? 'notstarted',
-            has_update: !!upd,
-          };
-        });
-
-        const totalRooms = rooms.length;
-        const updatedRooms = rooms.filter(r => r.has_update).length;
-        const floorProgress = totalRooms > 0
-          ? Math.round(rooms.reduce((s, r) => s + r.room_progress, 0) / totalRooms)
-          : 0;
-
+        const stat = statIndex[row.activity_id]?.[b.id]?.[f.id];
+        const total = totalRoomsByFloor[f.id] || 0;
         return {
           floor_id: f.id,
           floor_name: f.name,
           floor_number: f.floor_number,
-          total_rooms: totalRooms,
-          updated_rooms: updatedRooms,
-          floor_progress: floorProgress,
-          rooms,
+          total_rooms: total,
+          updated_rooms: stat?.updated_rooms ?? 0,
+          floor_progress: stat?.floor_progress ?? 0,
         };
       });
 
-      const buildingProgress = floors.length > 0
-        ? Math.round(floors.reduce((s, f) => s + f.floor_progress, 0) / floors.length)
+      const activeFl = floors.filter(f => f.floor_progress > 0);
+      const building_progress = activeFl.length > 0
+        ? Math.round(activeFl.reduce((s, f) => s + f.floor_progress, 0) / activeFl.length)
         : 0;
 
-      return { building_id: b.id, building_name: b.name, building_progress: buildingProgress, floors };
+      return { building_id: b.id, building_name: b.name, building_progress, floors };
     });
 
-    const overallProgress = buildings.length > 0
-      ? Math.round(buildings.reduce((s, b) => s + b.building_progress, 0) / buildings.length)
+    const activeB = buildings.filter(b => b.building_progress > 0);
+    const overall_progress = activeB.length > 0
+      ? Math.round(activeB.reduce((s, b) => s + b.building_progress, 0) / activeB.length)
       : 0;
 
     discMap[row.discipline_id].activities.push({
       activity_id: row.activity_id,
       activity_name: row.activity_name,
-      overall_progress: overallProgress,
+      overall_progress,
       buildings,
     });
   }

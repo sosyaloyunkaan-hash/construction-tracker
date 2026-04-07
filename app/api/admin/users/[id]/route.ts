@@ -40,12 +40,11 @@ export async function PUT(
     await query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [id]);
 
     if (Array.isArray(discipline_ids) && discipline_ids.length > 0) {
-      for (const disciplineId of discipline_ids) {
-        await query(
-          'INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ($1, $2)',
-          [id, disciplineId]
-        );
-      }
+      const vals = discipline_ids.map((_: number, i: number) => `($1, $${i + 2})`).join(',');
+      await query(
+        `INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ${vals}`,
+        [id, ...discipline_ids]
+      );
     }
 
     return NextResponse.json({ success: true });

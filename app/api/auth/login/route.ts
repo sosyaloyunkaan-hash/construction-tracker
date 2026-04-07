@@ -12,9 +12,12 @@ export async function POST(req: NextRequest) {
   }
 
   const { rows } = await query('SELECT * FROM engineers WHERE name = $1', [name]);
+  if (!rows.length) {
+    return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+  }
   const engineer = rows[0];
 
-  if (!engineer || !bcrypt.compareSync(password, engineer.password)) {
+  if (!bcrypt.compareSync(password, engineer.password)) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
 

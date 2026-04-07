@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 
 interface UpdateRecord {
   id: number;
@@ -61,7 +61,7 @@ export default function UpdateLog({ refreshTrigger }: Props) {
 
   useEffect(() => { fetchUpdates(); }, [fetchUpdates, refreshTrigger]);
 
-  const disciplines = Array.from(new Set(updates.map(u => u.discipline_name)));
+  const disciplines = useMemo(() => Array.from(new Set(updates.map(u => u.discipline_name))), [updates]);
 
   const filtered = updates.filter(u => {
     const q = filter.toLowerCase();
