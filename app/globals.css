@@ -23,28 +23,13 @@ input[type='range'] {
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #f59e0b;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  width: 0;
+  height: 0;
 }
 
 input[type='range']::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #f59e0b;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-}
-
-.dark input[type='range']::-webkit-slider-thumb {
-  border-color: #1e293b;
-}
-.dark input[type='range']::-moz-range-thumb {
-  border-color: #1e293b;
+  width: 0;
+  height: 0;
+  border: none;
+  background: transparent;
 }

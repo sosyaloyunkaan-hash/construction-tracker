@@ -474,48 +474,54 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                 </div>
               </div>
 
-              {/* Progress slider + manual input */}
+              {/* Progress slider */}
               <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Progress</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={progress}
-                      onChange={e => {
-                        const val = Math.max(0, Math.min(100, Number(e.target.value)));
-                        handleProgressChange(isNaN(val) ? 0 : val);
-                      }}
-                      className={`w-16 text-center text-lg font-bold border-2 rounded-lg py-0.5 focus:outline-none focus:border-amber-400 ${STATUS_CONFIG[status].text} border-slate-200`}
-                    />
-                    <span className={`text-lg font-bold ${STATUS_CONFIG[status].text}`}>%</span>
-                  </div>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Progress</label>
+                  <span className={`text-2xl font-black ${STATUS_CONFIG[status].text}`}>{progress}%</span>
                 </div>
-                <div className="relative">
-                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-1.5">
+
+                {/* Track with thumb ON the line */}
+                <div className="relative h-6 flex items-center mb-3">
+                  {/* Background track */}
+                  <div className="absolute w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${STATUS_CONFIG[status].bar}`}
+                      className={`h-full rounded-full transition-all duration-150 ${STATUS_CONFIG[status].bar}`}
                       style={{ width: `${progress}%` }}
                     />
                   </div>
+                  {/* Native range sits exactly on the track */}
                   <input
                     type="range"
                     min={0}
                     max={100}
                     value={progress}
                     onChange={e => handleProgressChange(Number(e.target.value))}
-                    style={{ background: 'transparent' }}
-                    className="w-full -mt-4 relative z-10"
+                    className="absolute w-full h-3 opacity-0 cursor-pointer z-10"
+                  />
+                  {/* Custom thumb */}
+                  <div
+                    className={`absolute w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 shadow-md transition-all duration-150 pointer-events-none ${STATUS_CONFIG[status].bar}`}
+                    style={{ left: `calc(${progress}% - ${progress * 0.24}px)` }}
                   />
                 </div>
-                <div className="flex justify-between text-xs text-slate-400 mt-1">
-                  <span>0%</span>
-                  <span>25%</span>
-                  <span>50%</span>
-                  <span>75%</span>
-                  <span>100%</span>
+
+                {/* Quick-select preset buttons */}
+                <div className="grid grid-cols-7 gap-1">
+                  {[10, 30, 50, 70, 85, 95, 100].map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => handleProgressChange(val)}
+                      className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        progress === val
+                          ? `${STATUS_CONFIG[status].bg} ${STATUS_CONFIG[status].text} ring-2 ring-offset-1 ring-current`
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      {val}%
+                    </button>
+                  ))}
                 </div>
               </div>
 
