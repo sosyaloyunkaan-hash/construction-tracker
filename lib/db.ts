@@ -89,7 +89,11 @@ export async function initDB() {
   if (parseInt(rows[0].count) === 0) {
     await seedData();
   } else {
-    await migrateUsers();
+    try {
+      await migrateUsers();
+    } catch (err) {
+      console.error('migrateUsers failed:', err);
+    }
   }
 }
 
