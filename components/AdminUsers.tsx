@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const COLOR_PRESETS = [
   '#0EA5E9',
@@ -196,15 +197,12 @@ export default function AdminUsers({ initialEngineers, allDisciplines }: Props) 
             <h1 className="text-lg font-bold">Admin Panel</h1>
           </div>
           <div className="flex items-center gap-3">
-            <a
-              href="/"
-              className="text-slate-300 hover:text-white text-sm transition-colors flex items-center gap-1"
-            >
+            <Link href="/" className="text-slate-300 hover:text-white text-sm transition-colors flex items-center gap-1">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               Back to app
-            </a>
+            </Link>
             <button
               onClick={handleLogout}
               className="text-slate-300 hover:text-white text-sm transition-colors flex items-center gap-1 bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg"
@@ -216,6 +214,18 @@ export default function AdminUsers({ initialEngineers, allDisciplines }: Props) 
               Logout
             </button>
           </div>
+        </div>
+
+        {/* Admin nav tabs */}
+        <div className="max-w-4xl mx-auto flex gap-1 mt-3">
+          <Link href="/admin/users"
+            className="px-4 py-1.5 text-xs font-semibold bg-slate-700 text-white rounded-lg">
+            Users
+          </Link>
+          <Link href="/admin/stats"
+            className="px-4 py-1.5 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+            Stats
+          </Link>
         </div>
       </header>
 

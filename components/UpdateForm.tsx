@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import CommentsThread from './CommentsThread';
 
 interface Engineer {
   id: number;
@@ -300,12 +301,12 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
       {/* Step 1: Building */}
       {step === 1 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-4">Select Building</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">Select Building</h2>
           <div className="grid grid-cols-2 gap-3">
             {buildings.map(b => (
               <button key={b.id} onClick={() => selectBuilding(b.id)}
-                className="p-4 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 border-2 border-slate-100 rounded-xl text-slate-800 font-semibold text-sm transition-all active:scale-95">
+                className="p-4 bg-slate-50 dark:bg-slate-700 hover:bg-amber-50 dark:hover:bg-slate-600 hover:border-amber-300 border-2 border-slate-100 dark:border-slate-600 rounded-xl text-slate-800 dark:text-slate-100 font-semibold text-sm transition-all active:scale-95">
                 <div className="text-2xl mb-1">🏗️</div>
                 {b.name}
               </button>
@@ -316,12 +317,12 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
       {/* Step 2: Floor */}
       {step === 2 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-4">Select Floor</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">Select Floor</h2>
           <div className="grid grid-cols-2 gap-2">
             {floors.map(f => (
               <button key={f.id} onClick={() => selectFloor(f.id)}
-                className="p-3 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 border-2 border-slate-100 rounded-xl text-slate-700 font-medium text-sm transition-all active:scale-95">
+                className="p-3 bg-slate-50 dark:bg-slate-700 hover:bg-amber-50 dark:hover:bg-slate-600 hover:border-amber-300 border-2 border-slate-100 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 font-medium text-sm transition-all active:scale-95">
                 {f.name}
               </button>
             ))}
@@ -331,12 +332,12 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
       {/* Step 3: Room */}
       {step === 3 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-4">Select Room</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">Select Room</h2>
           <div className="flex flex-col gap-2">
             {rooms.map(r => (
               <button key={r.id} onClick={() => selectRoom(r.id)}
-                className="p-3 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 border-2 border-slate-100 rounded-xl text-slate-700 font-medium text-sm text-left transition-all active:scale-95">
+                className="p-3 bg-slate-50 dark:bg-slate-700 hover:bg-amber-50 dark:hover:bg-slate-600 hover:border-amber-300 border-2 border-slate-100 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 font-medium text-sm text-left transition-all active:scale-95">
                 {r.name}
               </button>
             ))}
@@ -346,8 +347,8 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
       {/* Step 4: Discipline */}
       {step === 4 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-4">Select Discipline</h2>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-4">Select Discipline</h2>
           <div className="flex flex-col gap-2">
             {disciplines.map(d => {
               const isAuthorized = d.authorized === 1;
@@ -371,7 +372,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
       {/* Step 5: Activity */}
       {step === 5 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5">
           <h2 className="text-base font-semibold text-slate-800 mb-1">Select Activity</h2>
           {selectedDiscipline && (
             <p className="text-xs text-slate-500 mb-4">{selectedDiscipline.name}</p>
@@ -384,7 +385,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
             <div className="flex flex-col gap-2">
               {activities.map(a => (
                 <button key={a.id} onClick={() => selectActivity(a.id)}
-                  className="p-3 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 border-2 border-slate-100 rounded-xl text-slate-700 font-medium text-sm text-left transition-all active:scale-95">
+                  className="p-3 bg-slate-50 dark:bg-slate-700 hover:bg-amber-50 dark:hover:bg-slate-600 hover:border-amber-300 border-2 border-slate-100 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 font-medium text-sm text-left transition-all active:scale-95">
                   {a.name}
                 </button>
               ))}
@@ -405,7 +406,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
 
           {/* Latest update card */}
           {latestFetched && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                 Last Recorded Update
               </h3>
@@ -447,6 +448,17 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
           )}
 
           {/* Update form */}
+          {/* Comments thread */}
+          {buildingId && floorId && roomId && activityId && (
+            <CommentsThread
+              buildingId={buildingId}
+              floorId={floorId}
+              roomId={roomId}
+              activityId={activityId}
+              currentUser={engineer}
+            />
+          )}
+
           {!disciplineUnauthorized && (
             <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-5">
               <h3 className="text-base font-semibold text-slate-800">Submit New Update</h3>
@@ -534,7 +546,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                   onChange={e => setRemarks(e.target.value)}
                   rows={3}
                   placeholder="Add any notes or remarks…"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                  className="w-full px-3 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-700 dark:text-slate-200 dark:bg-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
                 />
               </div>
 
@@ -557,7 +569,7 @@ export default function UpdateForm({ engineer, onUpdateSubmitted }: Props) {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 font-semibold rounded-xl hover:bg-slate-200 transition-colors text-sm"
+                  className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors text-sm"
                 >
                   New Update
                 </button>

@@ -8,7 +8,6 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f8fafc;
 }
 
 input[type='range'] {
@@ -27,7 +26,7 @@ input[type='range']::-webkit-slider-thumb {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #1e40af;
+  background: #f59e0b;
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
@@ -37,8 +36,15 @@ input[type='range']::-moz-range-thumb {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #1e40af;
+  background: #f59e0b;
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.dark input[type='range']::-webkit-slider-thumb {
+  border-color: #1e293b;
+}
+.dark input[type='range']::-moz-range-thumb {
+  border-color: #1e293b;
 }

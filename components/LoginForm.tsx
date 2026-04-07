@@ -42,7 +42,7 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-900 dark:bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo / Title */}
         <div className="text-center mb-8">
@@ -56,16 +56,16 @@ export default function LoginForm() {
           <p className="text-slate-400 text-sm mt-1">Sign in to your account</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">
               Select Your Name
             </label>
             <select
               value={name}
               onChange={e => setName(e.target.value)}
               required
-              className="w-full px-3 py-3 border border-slate-200 rounded-xl text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none"
+              className="w-full px-3 py-3 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none"
             >
               <option value="">— Choose engineer —</option>
               {engineers.map(eng => (
@@ -75,7 +75,7 @@ export default function LoginForm() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1.5">
               Password
             </label>
             <div className="relative">
@@ -85,7 +85,7 @@ export default function LoginForm() {
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="Enter password"
-                className="w-full px-3 py-3 pr-11 border border-slate-200 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                className="w-full px-3 py-3 pr-11 border border-slate-200 dark:border-slate-600 rounded-xl text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               />
               <button type="button" onClick={() => setShowPassword(v => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">

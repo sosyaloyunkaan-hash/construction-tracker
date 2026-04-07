@@ -83,6 +83,17 @@ export async function initDB() {
       remarks TEXT DEFAULT '',
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id SERIAL PRIMARY KEY,
+      engineer_id INTEGER NOT NULL REFERENCES engineers(id),
+      building_id INTEGER NOT NULL REFERENCES buildings(id),
+      floor_id INTEGER NOT NULL REFERENCES floors(id),
+      room_id INTEGER NOT NULL REFERENCES rooms(id),
+      activity_id INTEGER NOT NULL REFERENCES activities(id),
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   const { rows } = await query('SELECT COUNT(*) FROM engineers');
