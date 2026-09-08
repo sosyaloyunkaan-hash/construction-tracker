@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { requireProject } from '@/lib/project';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -9,12 +8,6 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const scope = await requireProject();
-  if (scope instanceof NextResponse) return scope;
-
-  const { rows } = await query(
-    'SELECT * FROM buildings WHERE project_id = $1 ORDER BY name',
-    [scope]
-  );
+  const { rows } = await query('SELECT id, code, name FROM projects ORDER BY code');
   return NextResponse.json(rows);
 }

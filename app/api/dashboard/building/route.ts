@@ -1,19 +1,31 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { requireProject } from '@/lib/project';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 const BUILDING_DASHBOARD_CACHE_TTL_MS = 15_000;
-const CACHE_KEY = 'building-dashboard';
 const buildingDashboardCache = new Map<string, { expiresAt: number; data: unknown }>();
 const buildingDashboardInFlight = new Map<string, Promise<unknown>>();
 
-async function computeBuildingDashboard() {
+async function computeBuildingDashboard(projectId: number) {
   const [buildRows, floorRows, roomRows, actRows, updateRows] = await Promise.all([
-    query(`SELECT id, name FROM buildings ORDER BY name`),
-    query(`SELECT id, building_id, floor_number, name FROM floors ORDER BY building_id, floor_number`),
-    query(`SELECT id, floor_id, name FROM rooms ORDER BY floor_id, id`),
+    query(`SELECT id, name FROM buildings WHERE project_id = $1 ORDER BY name`, [projectId]),
+    query(`
+      SELECT f.id, f.building_id, f.floor_number, f.name
+      FROM floors f JOIN buildings b ON b.id = f.building_id
+      WHERE b.project_id = $1
+      ORDER BY f.building_id, f.floor_number
+    `, [projectId]),
+    query(`
+      SELECT r.id, r.floor_id, r.name
+      FROM rooms r
+      JOIN floors f ON f.id = r.floor_id
+      JOIN buildings b ON b.id = f.building_id
+      WHERE b.project_id = $1
+      ORDER BY r.floor_id, r.id
+    `, [projectId]),
     query(`
       SELECT a.id, a.name AS activity_name, d.name AS discipline_name
       FROM activities a JOIN disciplines d ON d.id = a.discipline_id
@@ -24,8 +36,9 @@ async function computeBuildingDashboard() {
       SELECT DISTINCT ON (activity_id, building_id, floor_id, room_id)
         activity_id, building_id, floor_id, room_id, progress, status
       FROM updates
+      WHERE project_id = $1
       ORDER BY activity_id, building_id, floor_id, room_id, created_at DESC
-    `),
+    `, [projectId]),
   ]);
 
   // Index: building_id -> floor_id -> room_id -> activity_id -> { progress, status }
@@ -98,23 +111,27 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const cached = buildingDashboardCache.get(CACHE_KEY);
+  const scope = await requireProject();
+  if (scope instanceof NextResponse) return scope;
+  const cacheKey = `building-dashboard:${scope}`;
+
+  const cached = buildingDashboardCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return NextResponse.json(cached.data);
   }
 
   // Coalesce concurrent misses onto a single computation.
-  let inFlight = buildingDashboardInFlight.get(CACHE_KEY);
+  let inFlight = buildingDashboardInFlight.get(cacheKey);
   if (!inFlight) {
-    inFlight = computeBuildingDashboard()
+    inFlight = computeBuildingDashboard(scope)
       .then((data) => {
-        buildingDashboardCache.set(CACHE_KEY, { expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS, data });
+        buildingDashboardCache.set(cacheKey, { expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS, data });
         return data;
       })
       .finally(() => {
-        buildingDashboardInFlight.delete(CACHE_KEY);
+        buildingDashboardInFlight.delete(cacheKey);
       });
-    buildingDashboardInFlight.set(CACHE_KEY, inFlight);
+    buildingDashboardInFlight.set(cacheKey, inFlight);
   }
 
   try {

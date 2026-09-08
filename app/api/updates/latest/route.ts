@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { requireProject } from '@/lib/project';
 import { query } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const scope = await requireProject();
+  if (scope instanceof NextResponse) return scope;
 
   const p = req.nextUrl.searchParams;
   const buildingId = p.get('buildingId');
@@ -30,10 +34,10 @@ export async function GET(req: NextRequest) {
     JOIN disciplines d ON d.id = u.discipline_id
     JOIN activities a ON a.id = u.activity_id
     WHERE u.building_id = $1 AND u.floor_id = $2 AND u.room_id = $3
-      AND u.discipline_id = $4 AND u.activity_id = $5
+      AND u.discipline_id = $4 AND u.activity_id = $5 AND u.project_id = $6
     ORDER BY u.created_at DESC
     LIMIT 1
-  `, [Number(buildingId), Number(floorId), Number(roomId), Number(disciplineId), Number(activityId)]);
+  `, [Number(buildingId), Number(floorId), Number(roomId), Number(disciplineId), Number(activityId), scope]);
 
   return NextResponse.json(rows[0] || null);
 }

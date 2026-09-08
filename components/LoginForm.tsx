@@ -29,7 +29,7 @@ export default function LoginForm() {
         body: JSON.stringify({ name, password }),
       });
       if (res.ok) {
-        router.push('/dashboard');
+        router.push('/');
       } else {
         const data = await res.json();
         setError(data.error || 'Login failed');

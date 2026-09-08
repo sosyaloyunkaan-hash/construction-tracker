@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { requireProject } from '@/lib/project';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -7,6 +8,9 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const scope = await requireProject();
+  if (scope instanceof NextResponse) return scope;
 
   const { rows } = await query(`
     SELECT
@@ -32,8 +36,9 @@ export async function GET() {
     JOIN rooms      r ON r.id = c.room_id
     JOIN activities a ON a.id = c.activity_id
     JOIN disciplines d ON d.id = a.discipline_id
+    WHERE c.project_id = $1
     ORDER BY c.created_at DESC
-  `);
+  `, [scope]);
 
   return NextResponse.json(rows);
 }

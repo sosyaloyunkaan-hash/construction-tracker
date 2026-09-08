@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { getClient } from '@/lib/db';
+import { requireProject } from '@/lib/project';
+import { getClient, query } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const scope = await requireProject();
+  if (scope instanceof NextResponse) return scope;
 
   const { buildingId, floorId, roomIds, disciplineId, activityId, progress, isHold, remarks } = await req.json();
 
   if (!buildingId || !floorId || !Array.isArray(roomIds) || roomIds.length === 0 ||
       !disciplineId || !activityId || progress == null) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  const { rows: bOk } = await query(
+    'SELECT 1 FROM buildings WHERE id = $1 AND project_id = $2',
+    [Number(buildingId), scope]
+  );
+  if (bOk.length === 0) {
+    return NextResponse.json({ error: 'Building is not in the selected project' }, { status: 400 });
   }
 
   const prog = Math.max(0, Math.min(100, Number(progress)));
@@ -38,18 +50,18 @@ export async function POST(req: NextRequest) {
     const values: unknown[] = [];
     const placeholders: string[] = [];
     roomIds.forEach((roomId: number, i: number) => {
-      const base = i * 9;
+      const base = i * 10;
       placeholders.push(
-        `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9})`
+        `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10})`
       );
       values.push(
-        user.id, Number(buildingId), Number(floorId), Number(roomId),
+        user.id, scope, Number(buildingId), Number(floorId), Number(roomId),
         Number(disciplineId), Number(activityId), status, prog, remarks || ''
       );
     });
 
     await client.query(
-      `INSERT INTO updates (engineer_id, building_id, floor_id, room_id, discipline_id, activity_id, status, progress, remarks)
+      `INSERT INTO updates (engineer_id, project_id, building_id, floor_id, room_id, discipline_id, activity_id, status, progress, remarks)
        VALUES ${placeholders.join(',')}`,
       values
     );

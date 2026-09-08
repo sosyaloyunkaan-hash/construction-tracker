@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { requireProject } from '@/lib/project';
 import { query } from '@/lib/db';
 import * as XLSX from 'xlsx';
 
@@ -8,6 +9,9 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const scope = await requireProject();
+  if (scope instanceof NextResponse) return scope;
 
   // Only export rows that have actual updates
   const { rows } = await query(`
@@ -25,6 +29,7 @@ export async function GET() {
         activity_id, building_id, floor_id, room_id, discipline_id,
         status, progress, remarks
       FROM updates
+      WHERE project_id = $1
       ORDER BY activity_id, building_id, floor_id, room_id, created_at DESC
     ) u
     JOIN buildings b ON b.id = u.building_id
@@ -33,7 +38,7 @@ export async function GET() {
     JOIN disciplines d ON d.id = u.discipline_id
     JOIN activities a ON a.id = u.activity_id
     ORDER BY b.name, f.floor_number, r.id, d.id, a.id
-  `);
+  `, [scope]);
 
   const statusLabel: Record<string, string> = {
     notstarted: 'Not Started',

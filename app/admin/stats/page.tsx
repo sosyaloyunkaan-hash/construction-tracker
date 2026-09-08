@@ -40,6 +40,10 @@ export default async function AdminStatsPage() {
             className="px-4 py-1.5 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
             Users
           </Link>
+          <Link href="/admin/projects"
+            className="px-4 py-1.5 text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+            Projects
+          </Link>
           <Link href="/admin/stats"
             className="px-4 py-1.5 text-xs font-semibold bg-slate-700 text-white rounded-lg">
             Stats

@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { requireProject } from '@/lib/project';
 import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 const DASHBOARD_CACHE_TTL_MS = 15_000;
-const CACHE_KEY = 'discipline-dashboard';
 const dashboardCache = new Map<string, { expiresAt: number; data: unknown }>();
 const dashboardInFlight = new Map<string, Promise<unknown>>();
 
-async function computeDashboard() {
+async function computeDashboard(projectId: number) {
   // Single round of queries: aggregate progress per (discipline, activity, building, floor) in the DB.
   const [discActRows, buildRows, floorRows, roomCountRows, updateRows] = await Promise.all([
     query(`
@@ -18,16 +18,29 @@ async function computeDashboard() {
       FROM disciplines d JOIN activities a ON a.discipline_id = d.id
       ORDER BY d.id, a.id
     `),
-    query(`SELECT id, name FROM buildings ORDER BY name`),
-    query(`SELECT id, building_id, floor_number, name FROM floors ORDER BY building_id, floor_number`),
+    query(`SELECT id, name FROM buildings WHERE project_id = $1 ORDER BY name`, [projectId]),
+    query(`
+      SELECT f.id, f.building_id, f.floor_number, f.name
+      FROM floors f JOIN buildings b ON b.id = f.building_id
+      WHERE b.project_id = $1
+      ORDER BY f.building_id, f.floor_number
+    `, [projectId]),
     // Total rooms per floor
-    query(`SELECT floor_id, COUNT(*) AS total FROM rooms GROUP BY floor_id`),
+    query(`
+      SELECT r.floor_id, COUNT(*) AS total
+      FROM rooms r
+      JOIN floors f ON f.id = r.floor_id
+      JOIN buildings b ON b.id = f.building_id
+      WHERE b.project_id = $1
+      GROUP BY r.floor_id
+    `, [projectId]),
     // Latest update per (activity, building, floor, room) — aggregated to floor level
     query(`
       WITH latest AS (
         SELECT DISTINCT ON (activity_id, building_id, floor_id, room_id)
           activity_id, building_id, floor_id, room_id, progress, status
         FROM updates
+        WHERE project_id = $1
         ORDER BY activity_id, building_id, floor_id, room_id, created_at DESC
       )
       SELECT activity_id, building_id, floor_id,
@@ -35,7 +48,7 @@ async function computeDashboard() {
              ROUND(AVG(progress)) AS floor_progress
       FROM latest
       GROUP BY activity_id, building_id, floor_id
-    `),
+    `, [projectId]),
   ]);
 
   // Build indexes
@@ -115,23 +128,27 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const cached = dashboardCache.get(CACHE_KEY);
+  const scope = await requireProject();
+  if (scope instanceof NextResponse) return scope;
+  const cacheKey = `discipline-dashboard:${scope}`;
+
+  const cached = dashboardCache.get(cacheKey);
   if (cached && Date.now() < cached.expiresAt) {
     return NextResponse.json(cached.data);
   }
 
   // Coalesce concurrent misses onto a single computation.
-  let inFlight = dashboardInFlight.get(CACHE_KEY);
+  let inFlight = dashboardInFlight.get(cacheKey);
   if (!inFlight) {
-    inFlight = computeDashboard()
+    inFlight = computeDashboard(scope)
       .then((data) => {
-        dashboardCache.set(CACHE_KEY, { expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS, data });
+        dashboardCache.set(cacheKey, { expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS, data });
         return data;
       })
       .finally(() => {
-        dashboardInFlight.delete(CACHE_KEY);
+        dashboardInFlight.delete(cacheKey);
       });
-    dashboardInFlight.set(CACHE_KEY, inFlight);
+    dashboardInFlight.set(cacheKey, inFlight);
   }
 
   try {
