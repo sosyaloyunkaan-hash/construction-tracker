@@ -137,8 +137,13 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
     }
   }, []);
 
-  useEffect(() => { fetchDisc(); },    [fetchDisc,    refreshTrigger]);
-  useEffect(() => { fetchBuilding(); }, [fetchBuilding, refreshTrigger]);
+  useEffect(() => {
+    if (view === 'discipline') fetchDisc();
+  }, [view, fetchDisc, refreshTrigger]);
+
+  useEffect(() => {
+    if (view === 'building') fetchBuilding();
+  }, [view, fetchBuilding, refreshTrigger]);
 
   async function handleExport() {
     setExporting(true);
@@ -165,7 +170,7 @@ export default function OverviewDashboard({ refreshTrigger }: Props) {
       {/* Toolbar */}
       <div className="flex justify-end gap-2 mb-3">
         <button
-          onClick={() => view === 'discipline' ? fetchDisc() : fetchBuilding()}
+          onClick={() => (view === 'discipline' ? fetchDisc() : fetchBuilding())}
           disabled={loading}
           className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
         >

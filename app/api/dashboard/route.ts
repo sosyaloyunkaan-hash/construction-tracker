@@ -4,12 +4,27 @@ import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+const DASHBOARD_CACHE_TTL_MS = 15_000;
+const dashboardCache = new Map<string, { expiresAt: number; data: unknown }>();
+const dashboardInFlight = new Map<string, Promise<unknown>>();
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Single query: aggregate progress per (discipline, activity, building, floor) in DB
-  const [discActRows, buildRows, floorRows, roomCountRows, updateRows] = await Promise.all([
+  const cacheKey = 'discipline-dashboard';
+  const cached = dashboardCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return NextResponse.json(cached.data);
+  }
+
+  if (dashboardInFlight.has(cacheKey)) {
+    return NextResponse.json(await dashboardInFlight.get(cacheKey));
+  }
+
+  const inFlight = (async () => {
+    // Single query: aggregate progress per (discipline, activity, building, floor) in DB
+    const [discActRows, buildRows, floorRows, roomCountRows, updateRows] = await Promise.all([
     query(`
       SELECT d.id AS discipline_id, d.name AS discipline_name,
              a.id AS activity_id, a.name AS activity_name
@@ -106,5 +121,25 @@ export async function GET() {
     });
   }
 
-  return NextResponse.json(Object.values(discMap));
+  const payload = Object.values(discMap);
+  dashboardCache.set(cacheKey, {
+    expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+    data: payload,
+  });
+
+    return payload;
+  })();
+
+  dashboardInFlight.set(cacheKey, inFlight);
+
+  try {
+    const payload = await inFlight;
+    dashboardCache.set(cacheKey, {
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+      data: payload,
+    });
+    return NextResponse.json(payload);
+  } finally {
+    dashboardInFlight.delete(cacheKey);
+  }
 }

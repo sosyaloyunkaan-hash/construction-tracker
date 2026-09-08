@@ -4,11 +4,26 @@ import { query } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+const BUILDING_DASHBOARD_CACHE_TTL_MS = 15_000;
+const buildingDashboardCache = new Map<string, { expiresAt: number; data: unknown }>();
+const buildingDashboardInFlight = new Map<string, Promise<unknown>>();
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const [buildRows, floorRows, roomRows, actRows, updateRows] = await Promise.all([
+  const cacheKey = 'building-dashboard';
+  const cached = buildingDashboardCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return NextResponse.json(cached.data);
+  }
+
+  if (buildingDashboardInFlight.has(cacheKey)) {
+    return NextResponse.json(await buildingDashboardInFlight.get(cacheKey));
+  }
+
+  const inFlight = (async () => {
+    const [buildRows, floorRows, roomRows, actRows, updateRows] = await Promise.all([
     query(`SELECT id, name FROM buildings ORDER BY name`),
     query(`SELECT id, building_id, floor_number, name FROM floors ORDER BY building_id, floor_number`),
     query(`SELECT id, floor_id, name FROM rooms ORDER BY floor_id, id`),
@@ -89,5 +104,24 @@ export async function GET() {
     return { building_id: b.id, building_name: b.name, building_progress, floors };
   });
 
-  return NextResponse.json(buildings);
+  buildingDashboardCache.set(cacheKey, {
+    expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS,
+    data: buildings,
+  });
+
+    return buildings;
+  })();
+
+  buildingDashboardInFlight.set(cacheKey, inFlight);
+
+  try {
+    const payload = await inFlight;
+    buildingDashboardCache.set(cacheKey, {
+      expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS,
+      data: payload,
+    });
+    return NextResponse.json(payload);
+  } finally {
+    buildingDashboardInFlight.delete(cacheKey);
+  }
 }

@@ -94,6 +94,19 @@ export async function initDB() {
       message TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE INDEX IF NOT EXISTS idx_updates_activity_lookup
+      ON updates (activity_id, building_id, floor_id, room_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_updates_room_lookup
+      ON updates (building_id, floor_id, room_id, discipline_id, activity_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_floors_building_order
+      ON floors (building_id, floor_number);
+    CREATE INDEX IF NOT EXISTS idx_rooms_floor_order
+      ON rooms (floor_id);
+    CREATE INDEX IF NOT EXISTS idx_activities_discipline
+      ON activities (discipline_id);
+    CREATE INDEX IF NOT EXISTS idx_engineer_disciplines_engineer
+      ON engineer_disciplines (engineer_id, discipline_id);
   `);
 
   const { rows } = await query('SELECT COUNT(*) FROM engineers');
