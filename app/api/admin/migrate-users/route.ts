@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPool } from '@/lib/db';
+import { getClient } from '@/lib/db';
 import { verifyAdminToken } from '@/lib/auth';
 import { SEED_USERS } from '@/lib/seedUsers';
 import bcrypt from 'bcryptjs';
@@ -17,8 +17,7 @@ export async function POST() {
 
   const keepNames = SEED_USERS.map(u => u.name);
 
-  const pool = getPool();
-  const client = await pool.connect();
+  const client = await getClient();
   try {
     await client.query('BEGIN');
 

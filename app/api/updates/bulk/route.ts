@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { getPool } from '@/lib/db';
+import { getClient } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -20,8 +20,7 @@ export async function POST(req: NextRequest) {
   else if (prog === 0) status = 'notstarted';
   else status = 'ongoing';
 
-  const pool = getPool();
-  const client = await pool.connect();
+  const client = await getClient();
   try {
     await client.query('BEGIN');
 

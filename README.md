@@ -9,34 +9,47 @@ Stack: **Next.js 14 (App Router)** · **PostgreSQL** (`pg`) · **jose** (JWT coo
 ### 1. Install Node.js
 Download and install the LTS version from https://nodejs.org
 
-### 2. Provision a PostgreSQL database
-Any Postgres works — local, Railway, Neon, Supabase. Grab its connection string.
-
-### 3. Configure environment
+### 2. Configure environment
 ```
 cp .env.example .env.local
 ```
-Then edit `.env.local` and set at least:
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `DATABASE_URL` | yes | Postgres connection string |
-| `JWT_SECRET` | yes | Signs session cookies. App refuses to start in production without it. |
+| `DATABASE_URL` | prod only | Postgres connection string. **Leave unset locally** to use the embedded DB (see below). |
+| `JWT_SECRET` | yes | Signs session cookies. App refuses to sign in production without it. |
 | `ADMIN_PASSWORD` | yes (for `/admin`) | Password for the admin panel. Admin login returns 500 until set. |
 | `SEED_PASSWORD_KAAN` / `SEED_PASSWORD_EREN` | no | Passwords for the two accounts created on first run. Default `changeme`. |
 | `RESET_SECRET` | no | Guards the destructive DB reset endpoint. |
+| `USE_PGLITE` | no | Set to `1` to force the embedded DB even when `DATABASE_URL` is set. |
 
 Generate a JWT secret:
 ```
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-### 4. Start the app
+### 3. Start the app
 ```
 npm install
 npm run dev
 ```
 Open http://localhost:3000
+
+## Local trial — no database to install
+
+If `DATABASE_URL` is not set, the app runs **PGlite**, an embedded Postgres that
+lives inside the Node process and persists to `./.pglite/`. No Docker, no Postgres
+server. Just `npm install && npm run dev`.
+
+The committed `.env.local` is already set up for this, with:
+
+| Account | Where | Password |
+|---|---|---|
+| `Kaan Ekinci` | `/login` | `kaan123` |
+| `Eren` | `/login` | `eren123` |
+| admin | `/admin` | `admin123` |
+
+Delete the `.pglite/` folder to wipe all data and re-seed on the next request.
 
 The schema is created automatically on the first request, and if the `engineers`
 table is empty it is seeded with buildings/floors/rooms (from `rooms-input.csv`),

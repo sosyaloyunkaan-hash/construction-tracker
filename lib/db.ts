@@ -1,34 +1,27 @@
-import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 import { ROOM_DATA } from './roomData';
 import { SEED_USERS } from './seedUsers';
+import { getBackend, type DbClient } from './dbBackend';
 
 declare global {
-  // eslint-disable-next-line no-var
-  var __pool: Pool | undefined;
   // eslint-disable-next-line no-var
   var __dbInit: Promise<void> | undefined;
 }
 
-export function getPool(): Pool {
-  if (!global.__pool) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL is not set — configure it in .env.local or your host environment');
-    }
-    global.__pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      max: 5,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-    });
-  }
-  return global.__pool;
+/** A transactional client (BEGIN/COMMIT/ROLLBACK). Caller must `release()`. */
+export async function getClient(): Promise<DbClient> {
+  await ensureDB();
+  return (await getBackend()).getClient();
 }
 
 /** Raw query with no schema bootstrap — used by the init path itself. */
-function rawQuery(text: string, params?: unknown[]) {
-  return getPool().query(text, params);
+async function rawQuery(text: string, params?: unknown[]) {
+  return (await getBackend()).query(text, params);
+}
+
+/** Raw multi-statement exec (DDL) with no schema bootstrap. */
+async function rawExec(sql: string) {
+  return (await getBackend()).exec(sql);
 }
 
 /**
@@ -52,7 +45,7 @@ export async function query(text: string, params?: unknown[]) {
 }
 
 export async function initDB() {
-  await rawQuery(`
+  await rawExec(`
     CREATE TABLE IF NOT EXISTS engineers (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -135,8 +128,8 @@ export async function initDB() {
       ON engineer_disciplines (engineer_id, discipline_id);
   `);
 
-  const { rows } = await rawQuery('SELECT COUNT(*) FROM engineers');
-  if (parseInt(rows[0].count) === 0) {
+  const { rows } = await rawQuery('SELECT COUNT(*)::int AS count FROM engineers');
+  if (Number(rows[0].count) === 0) {
     await seedData();
   }
 }
