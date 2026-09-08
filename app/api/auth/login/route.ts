@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { query, initDB } from '@/lib/db';
+import { query } from '@/lib/db';
 import { signToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
-  await initDB();
   const { name, password } = await req.json();
 
   if (!name || !password) {
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
   const engineer = rows[0];
 
-  if (!bcrypt.compareSync(password, engineer.password)) {
+  if (!(await bcrypt.compare(password, engineer.password))) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
 

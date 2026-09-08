@@ -1,14 +1,20 @@
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 import { ROOM_DATA } from './roomData';
+import { SEED_USERS } from './seedUsers';
 
 declare global {
   // eslint-disable-next-line no-var
   var __pool: Pool | undefined;
+  // eslint-disable-next-line no-var
+  var __dbInit: Promise<void> | undefined;
 }
 
 export function getPool(): Pool {
   if (!global.__pool) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL is not set — configure it in .env.local or your host environment');
+    }
     global.__pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
@@ -20,13 +26,33 @@ export function getPool(): Pool {
   return global.__pool;
 }
 
+/** Raw query with no schema bootstrap — used by the init path itself. */
+function rawQuery(text: string, params?: unknown[]) {
+  return getPool().query(text, params);
+}
+
+/**
+ * Ensures the schema exists before the first real query, exactly once per process.
+ * On failure the memoised promise is cleared so the next request retries instead of
+ * being stuck with a permanently rejected init.
+ */
+export function ensureDB(): Promise<void> {
+  if (!global.__dbInit) {
+    global.__dbInit = initDB().catch((err) => {
+      global.__dbInit = undefined;
+      throw err;
+    });
+  }
+  return global.__dbInit;
+}
+
 export async function query(text: string, params?: unknown[]) {
-  const pool = getPool();
-  return pool.query(text, params);
+  await ensureDB();
+  return rawQuery(text, params);
 }
 
 export async function initDB() {
-  await query(`
+  await rawQuery(`
     CREATE TABLE IF NOT EXISTS engineers (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -109,71 +135,9 @@ export async function initDB() {
       ON engineer_disciplines (engineer_id, discipline_id);
   `);
 
-  const { rows } = await query('SELECT COUNT(*) FROM engineers');
+  const { rows } = await rawQuery('SELECT COUNT(*) FROM engineers');
   if (parseInt(rows[0].count) === 0) {
     await seedData();
-  }
-}
-
-async function migrateUsers() {
-  const keepUsers = [
-    { name: 'Kaan Ekinci', password: 'Kaan321456', initials: 'KE', color: '#0EA5E9' },
-    { name: 'Eren',        password: 'Eren321456', initials: 'ER', color: '#22C55E' },
-  ];
-  const keepNames = keepUsers.map(u => u.name);
-
-  const pool = getPool();
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Delete engineers not in keep list (delete updates + disciplines first)
-    const { rows: allEngineers } = await client.query('SELECT id, name FROM engineers');
-    for (const eng of allEngineers) {
-      if (!keepNames.includes(eng.name)) {
-        await client.query('DELETE FROM updates WHERE engineer_id = $1', [eng.id]);
-        await client.query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [eng.id]);
-        await client.query('DELETE FROM engineers WHERE id = $1', [eng.id]);
-      }
-    }
-
-    // Get all discipline IDs
-    const { rows: disciplines } = await client.query('SELECT id FROM disciplines');
-    const allDisciplineIds = disciplines.map((d: { id: number }) => d.id);
-
-    // Upsert each keep user
-    for (const user of keepUsers) {
-      const hash = bcrypt.hashSync(user.password, 10);
-      const { rows: existing } = await client.query('SELECT id FROM engineers WHERE name = $1', [user.name]);
-      let engineerId: number;
-      if (existing.length > 0) {
-        engineerId = existing[0].id;
-        await client.query(
-          'UPDATE engineers SET password = $1, initials = $2, avatar_color = $3 WHERE id = $4',
-          [hash, user.initials, user.color, engineerId]
-        );
-      } else {
-        const { rows } = await client.query(
-          'INSERT INTO engineers (name, password, initials, avatar_color) VALUES ($1, $2, $3, $4) RETURNING id',
-          [user.name, hash, user.initials, user.color]
-        );
-        engineerId = rows[0].id;
-      }
-      await client.query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [engineerId]);
-      for (const discId of allDisciplineIds) {
-        await client.query(
-          'INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ($1, $2)',
-          [engineerId, discId]
-        );
-      }
-    }
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
   }
 }
 
@@ -184,7 +148,7 @@ async function seedData() {
   const disciplineIds: Record<string, number> = {};
 
   for (const name of disciplineNames) {
-    const { rows } = await query('INSERT INTO disciplines (name) VALUES ($1) RETURNING id', [name]);
+    const { rows } = await rawQuery('INSERT INTO disciplines (name) VALUES ($1) RETURNING id', [name]);
     disciplineIds[name] = rows[0].id;
   }
 
@@ -211,28 +175,25 @@ async function seedData() {
   for (const [disc, acts] of Object.entries(activitiesMap)) {
     const vals = acts.map((a, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(',');
     const params = acts.flatMap(a => [disciplineIds[disc], a]);
-    await query(`INSERT INTO activities (discipline_id, name) VALUES ${vals}`, params);
+    await rawQuery(`INSERT INTO activities (discipline_id, name) VALUES ${vals}`, params);
   }
 
-  const engineers = [
-    { name: 'Kaan Ekinci', password: 'Kaan321456', initials: 'KE', color: '#0EA5E9', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
-    { name: 'Eren',        password: 'Eren321456', initials: 'ER', color: '#22C55E', disciplines: ['MEP', 'Finishing', 'Civil', 'External Works'] },
-  ];
-
-  for (const eng of engineers) {
+  // Every seed engineer gets access to all disciplines.
+  const allDisciplineIds = Object.values(disciplineIds);
+  for (const eng of SEED_USERS) {
     const hash = bcrypt.hashSync(eng.password, 10);
-    const { rows } = await query(
+    const { rows } = await rawQuery(
       'INSERT INTO engineers (name, password, initials, avatar_color) VALUES ($1, $2, $3, $4) RETURNING id',
       [eng.name, hash, eng.initials, eng.color]
     );
-    for (const disc of eng.disciplines) {
-      await query('INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ($1, $2)', [rows[0].id, disciplineIds[disc]]);
+    for (const discId of allDisciplineIds) {
+      await rawQuery('INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ($1, $2)', [rows[0].id, discId]);
     }
   }
 
   // Insert buildings, floors, rooms from CSV data
   for (const buildingName of Object.keys(ROOM_DATA).sort()) {
-    const { rows: bRows } = await query(
+    const { rows: bRows } = await rawQuery(
       'INSERT INTO buildings (name) VALUES ($1) RETURNING id',
       [buildingName]
     );
@@ -247,7 +208,7 @@ async function seedData() {
 
     for (let fi = 0; fi < floors.length; fi++) {
       const floorName = floors[fi];
-      const { rows: fRows } = await query(
+      const { rows: fRows } = await rawQuery(
         'INSERT INTO floors (building_id, floor_number, name) VALUES ($1, $2, $3) RETURNING id',
         [bId, fi + 1, floorName]
       );
@@ -257,7 +218,7 @@ async function seedData() {
       if (rooms.length > 0) {
         const vals = rooms.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(',');
         const params = rooms.flatMap(r => [fId, r]);
-        await query(`INSERT INTO rooms (floor_id, name) VALUES ${vals}`, params);
+        await rawQuery(`INSERT INTO rooms (floor_id, name) VALUES ${vals}`, params);
       }
     }
   }

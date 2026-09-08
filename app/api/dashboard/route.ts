@@ -5,26 +5,13 @@ import { query } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const DASHBOARD_CACHE_TTL_MS = 15_000;
+const CACHE_KEY = 'discipline-dashboard';
 const dashboardCache = new Map<string, { expiresAt: number; data: unknown }>();
 const dashboardInFlight = new Map<string, Promise<unknown>>();
 
-export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const cacheKey = 'discipline-dashboard';
-  const cached = dashboardCache.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return NextResponse.json(cached.data);
-  }
-
-  if (dashboardInFlight.has(cacheKey)) {
-    return NextResponse.json(await dashboardInFlight.get(cacheKey));
-  }
-
-  const inFlight = (async () => {
-    // Single query: aggregate progress per (discipline, activity, building, floor) in DB
-    const [discActRows, buildRows, floorRows, roomCountRows, updateRows] = await Promise.all([
+async function computeDashboard() {
+  // Single round of queries: aggregate progress per (discipline, activity, building, floor) in the DB.
+  const [discActRows, buildRows, floorRows, roomCountRows, updateRows] = await Promise.all([
     query(`
       SELECT d.id AS discipline_id, d.name AS discipline_name,
              a.id AS activity_id, a.name AS activity_name
@@ -121,25 +108,37 @@ export async function GET() {
     });
   }
 
-  const payload = Object.values(discMap);
-  dashboardCache.set(cacheKey, {
-    expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-    data: payload,
-  });
+  return Object.values(discMap);
+}
 
-    return payload;
-  })();
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  dashboardInFlight.set(cacheKey, inFlight);
+  const cached = dashboardCache.get(CACHE_KEY);
+  if (cached && Date.now() < cached.expiresAt) {
+    return NextResponse.json(cached.data);
+  }
+
+  // Coalesce concurrent misses onto a single computation.
+  let inFlight = dashboardInFlight.get(CACHE_KEY);
+  if (!inFlight) {
+    inFlight = computeDashboard()
+      .then((data) => {
+        dashboardCache.set(CACHE_KEY, { expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS, data });
+        return data;
+      })
+      .finally(() => {
+        dashboardInFlight.delete(CACHE_KEY);
+      });
+    dashboardInFlight.set(CACHE_KEY, inFlight);
+  }
 
   try {
-    const payload = await inFlight;
-    dashboardCache.set(cacheKey, {
-      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
-      data: payload,
-    });
-    return NextResponse.json(payload);
-  } finally {
-    dashboardInFlight.delete(cacheKey);
+    const data = await inFlight;
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error('dashboard failed:', err);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

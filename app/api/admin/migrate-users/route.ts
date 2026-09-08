@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
+import { verifyAdminToken } from '@/lib/auth';
+import { SEED_USERS } from '@/lib/seedUsers';
 import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-  const keepUsers = [
-    { name: 'Kaan Ekinci', password: 'Kaan321456', initials: 'KE', color: '#0EA5E9' },
-    { name: 'Eren',        password: 'Eren321456', initials: 'ER', color: '#22C55E' },
-  ];
-  const keepNames = keepUsers.map(u => u.name);
+/**
+ * One-off maintenance endpoint: prune the engineers table down to SEED_USERS,
+ * (re)hash their passwords and grant every discipline. Destructive — admin only.
+ */
+export async function POST() {
+  if (!(await verifyAdminToken())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const keepNames = SEED_USERS.map(u => u.name);
 
   const pool = getPool();
   const client = await pool.connect();
@@ -20,6 +26,7 @@ export async function GET() {
     const deleted: string[] = [];
     for (const eng of allEngineers) {
       if (!keepNames.includes(eng.name)) {
+        await client.query('DELETE FROM comments WHERE engineer_id = $1', [eng.id]);
         await client.query('DELETE FROM updates WHERE engineer_id = $1', [eng.id]);
         await client.query('DELETE FROM engineer_disciplines WHERE engineer_id = $1', [eng.id]);
         await client.query('DELETE FROM engineers WHERE id = $1', [eng.id]);
@@ -31,7 +38,7 @@ export async function GET() {
     const allDisciplineIds = disciplines.map((d: { id: number }) => d.id);
 
     const upserted: string[] = [];
-    for (const user of keepUsers) {
+    for (const user of SEED_USERS) {
       const hash = bcrypt.hashSync(user.password, 10);
       const { rows: existing } = await client.query('SELECT id FROM engineers WHERE name = $1', [user.name]);
       let engineerId: number;
@@ -63,7 +70,7 @@ export async function GET() {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('migrate-users failed:', err);
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   } finally {
     client.release();
   }

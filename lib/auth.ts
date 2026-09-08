@@ -1,9 +1,25 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'construction-tracker-secret-key-2024'
-);
+const DEV_FALLBACK_SECRET = 'dev-only-insecure-secret-do-not-use-in-production';
+
+let cachedSecret: Uint8Array | undefined;
+
+/**
+ * Resolved lazily (not at import time) so a missing secret surfaces as a failed
+ * auth request rather than crashing the build. In production a real JWT_SECRET is
+ * mandatory; outside production a fixed dev key keeps local sessions stable.
+ */
+function getSecret(): Uint8Array {
+  if (!cachedSecret) {
+    const raw = process.env.JWT_SECRET;
+    if (!raw && process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET must be set in production — refusing to sign with a default key');
+    }
+    cachedSecret = new TextEncoder().encode(raw || DEV_FALLBACK_SECRET);
+  }
+  return cachedSecret;
+}
 
 export interface JWTPayload {
   id: number;
@@ -16,12 +32,12 @@ export async function signToken(payload: JWTPayload): Promise<string> {
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('24h')
-    .sign(SECRET);
+    .sign(getSecret());
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getSecret());
     return payload as unknown as JWTPayload;
   } catch {
     return null;
@@ -39,7 +55,7 @@ export async function signAdminToken(): Promise<string> {
   return new SignJWT({ admin: true })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('8h')
-    .sign(SECRET);
+    .sign(getSecret());
 }
 
 export async function verifyAdminToken(): Promise<boolean> {
@@ -47,7 +63,7 @@ export async function verifyAdminToken(): Promise<boolean> {
   const token = cookieStore.get('admin_token')?.value;
   if (!token) return false;
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getSecret());
     return payload.admin === true;
   } catch {
     return false;

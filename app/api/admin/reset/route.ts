@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, initDB } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
+  const configured = process.env.RESET_SECRET;
   const secret = req.nextUrl.searchParams.get('secret');
-  if (secret !== process.env.RESET_SECRET) {
+  if (!configured || secret !== configured) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // Drop all data and re-seed
+  await query('DROP TABLE IF EXISTS comments');
   await query('DROP TABLE IF EXISTS updates');
   await query('DROP TABLE IF EXISTS rooms');
   await query('DROP TABLE IF EXISTS floors');

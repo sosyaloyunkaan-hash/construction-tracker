@@ -5,25 +5,12 @@ import { query } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 const BUILDING_DASHBOARD_CACHE_TTL_MS = 15_000;
+const CACHE_KEY = 'building-dashboard';
 const buildingDashboardCache = new Map<string, { expiresAt: number; data: unknown }>();
 const buildingDashboardInFlight = new Map<string, Promise<unknown>>();
 
-export async function GET() {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const cacheKey = 'building-dashboard';
-  const cached = buildingDashboardCache.get(cacheKey);
-  if (cached && Date.now() < cached.expiresAt) {
-    return NextResponse.json(cached.data);
-  }
-
-  if (buildingDashboardInFlight.has(cacheKey)) {
-    return NextResponse.json(await buildingDashboardInFlight.get(cacheKey));
-  }
-
-  const inFlight = (async () => {
-    const [buildRows, floorRows, roomRows, actRows, updateRows] = await Promise.all([
+async function computeBuildingDashboard() {
+  const [buildRows, floorRows, roomRows, actRows, updateRows] = await Promise.all([
     query(`SELECT id, name FROM buildings ORDER BY name`),
     query(`SELECT id, building_id, floor_number, name FROM floors ORDER BY building_id, floor_number`),
     query(`SELECT id, floor_id, name FROM rooms ORDER BY floor_id, id`),
@@ -104,24 +91,37 @@ export async function GET() {
     return { building_id: b.id, building_name: b.name, building_progress, floors };
   });
 
-  buildingDashboardCache.set(cacheKey, {
-    expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS,
-    data: buildings,
-  });
+  return buildings;
+}
 
-    return buildings;
-  })();
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  buildingDashboardInFlight.set(cacheKey, inFlight);
+  const cached = buildingDashboardCache.get(CACHE_KEY);
+  if (cached && Date.now() < cached.expiresAt) {
+    return NextResponse.json(cached.data);
+  }
+
+  // Coalesce concurrent misses onto a single computation.
+  let inFlight = buildingDashboardInFlight.get(CACHE_KEY);
+  if (!inFlight) {
+    inFlight = computeBuildingDashboard()
+      .then((data) => {
+        buildingDashboardCache.set(CACHE_KEY, { expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS, data });
+        return data;
+      })
+      .finally(() => {
+        buildingDashboardInFlight.delete(CACHE_KEY);
+      });
+    buildingDashboardInFlight.set(CACHE_KEY, inFlight);
+  }
 
   try {
-    const payload = await inFlight;
-    buildingDashboardCache.set(cacheKey, {
-      expiresAt: Date.now() + BUILDING_DASHBOARD_CACHE_TTL_MS,
-      data: payload,
-    });
-    return NextResponse.json(payload);
-  } finally {
-    buildingDashboardInFlight.delete(cacheKey);
+    const data = await inFlight;
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error('building dashboard failed:', err);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
