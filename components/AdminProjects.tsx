@@ -70,15 +70,21 @@ export default function AdminProjects({ initialProjects }: Props) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Import failed');
-      setImportMsg(m => ({
-        ...m,
-        [projectId]: `Added ${data.buildingsAdded} buildings, ${data.floorsAdded} floors, ${data.roomsAdded} rooms.`,
-      }));
+      const parts = [
+        `${data.buildingsAdded} buildings`,
+        `${data.floorsAdded} floors`,
+        `${data.roomsAdded} rooms`,
+      ];
+      if (data.updatesAdded || data.updatesSkipped) {
+        parts.push(`${data.updatesAdded} status updates`);
+        if (data.updatesSkipped) parts.push(`${data.updatesSkipped} rows skipped`);
+      }
+      setImportMsg(m => ({ ...m, [projectId]: `Imported: ${parts.join(', ')}.` }));
       router.refresh();
     } catch (err) {
       setImportMsg(m => ({
         ...m,
-        [projectId]: err instanceof Error ? err.message : 'Import failed',
+        [projectId]: `error: ${err instanceof Error ? err.message : 'Import failed'}`,
       }));
     } finally {
       setImporting(null);
@@ -182,30 +188,45 @@ export default function AdminProjects({ initialProjects }: Props) {
               </div>
 
               <div className="mt-4 border-t border-slate-100 pt-4">
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Import structure — CSV with <code className="bg-slate-100 px-1 rounded">Building,Floor,Room</code> columns
-                </label>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <input
-                    ref={el => { fileInputs.current[p.id] = el; }}
-                    type="file"
-                    accept=".csv,text/csv,text/plain"
-                    disabled={importing !== null}
-                    onChange={e => {
-                      const f = e.target.files?.[0];
-                      if (f) uploadCsv(p.id, f);
-                    }}
-                    className="text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-white hover:file:bg-slate-700 file:cursor-pointer"
-                  />
-                  {importing === p.id && (
-                    <span className="text-xs text-slate-500 flex items-center gap-1.5">
-                      <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                      Importing…
-                    </span>
-                  )}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-xs font-medium text-slate-600">
+                    Data — CSV columns:{' '}
+                    <code className="bg-slate-100 px-1 rounded">
+                      Building,Floor,Room,Discipline,Activity,Progress,Status,Remarks
+                    </code>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/api/admin/projects/${p.id}/export`}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                      Export current
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => fileInputs.current[p.id]?.click()}
+                      disabled={importing !== null}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700 transition-colors disabled:opacity-60"
+                    >
+                      {importing === p.id ? 'Importing…' : 'Import CSV'}
+                    </button>
+                    <input
+                      ref={el => { fileInputs.current[p.id] = el; }}
+                      type="file"
+                      accept=".csv,text/csv,text/plain"
+                      className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadCsv(p.id, f);
+                      }}
+                    />
+                  </div>
                 </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">
+                  Export gives the current state (headers only if empty). Edit Progress / Status / Remarks and import it back.
+                </p>
                 {importMsg[p.id] && (
-                  <p className={`text-xs mt-2 ${importMsg[p.id].startsWith('Added') ? 'text-green-700' : 'text-red-600'}`}>
+                  <p className={`text-xs mt-2 ${importMsg[p.id].startsWith('Imported') ? 'text-green-700' : 'text-red-600'}`}>
                     {importMsg[p.id]}
                   </p>
                 )}

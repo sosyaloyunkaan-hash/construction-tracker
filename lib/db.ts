@@ -326,24 +326,198 @@ export async function importRoomStructure(
   return res;
 }
 
-/** Parse a "Building,Floor,Room" CSV (header optional) into a RoomStructure. */
-export function parseRoomCsv(text: string): RoomStructure {
-  const out: RoomStructure = {};
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    // split into 3 fields; the room name keeps any remaining commas
-    const first = line.indexOf(',');
-    const second = line.indexOf(',', first + 1);
-    if (first === -1 || second === -1) continue;
-    const building = line.slice(0, first).trim();
-    const floor = line.slice(first + 1, second).trim();
-    const room = line.slice(second + 1).trim().replace(/^"|"$/g, '');
+// ---------------------------------------------------------------------------
+// CSV round-trip (Building,Floor,Room[,Discipline,Activity,Progress,Status,Remarks])
+// ---------------------------------------------------------------------------
+
+export const PROJECT_CSV_HEADERS = [
+  'Building', 'Floor', 'Room', 'Discipline', 'Activity', 'Progress', 'Status', 'Remarks',
+] as const;
+
+const STATUS_LABEL: Record<string, string> = {
+  notstarted: 'Not Started', ongoing: 'Ongoing', completed: 'Completed', hold: 'Hold',
+};
+
+export function statusLabel(s: string): string {
+  return STATUS_LABEL[s] ?? s;
+}
+
+/** Progress + optional status text -> canonical status enum (matches the updates API). */
+export function deriveStatus(progress: number, rawStatus?: string): string {
+  const s = (rawStatus || '').toLowerCase().replace(/[^a-z]/g, '');
+  const isHold = s === 'hold' || s === 'onhold';
+  if (progress >= 100) return 'completed';
+  if (isHold) return 'hold';
+  if (progress <= 0) return 'notstarted';
+  return 'ongoing';
+}
+
+/** Minimal RFC-4180 CSV parser (handles quotes, escaped quotes, CRLF). */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  const stripBom = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+
+  for (let i = 0; i < stripBom.length; i++) {
+    const c = stripBom[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (stripBom[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n') {
+      row.push(field); rows.push(row); row = []; field = '';
+    } else if (c !== '\r') {
+      field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim() !== ''));
+}
+
+export function csvCell(v: string | number | null | undefined): string {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function toCsv(headerRow: readonly string[], dataRows: (string | number | null)[][]): string {
+  const lines = [headerRow.map(csvCell).join(',')];
+  for (const r of dataRows) lines.push(r.map(csvCell).join(','));
+  return lines.join('\r\n') + '\r\n';
+}
+
+export interface ParsedUpdate {
+  building: string;
+  floor: string;
+  room: string;
+  discipline: string;
+  activity: string;
+  progress: number;
+  status?: string;
+  remarks: string;
+}
+
+export interface ParsedProjectCsv {
+  structure: RoomStructure;
+  updates: ParsedUpdate[];
+}
+
+/**
+ * Parse an exported project CSV. Always yields the room structure from the first
+ * three columns; rows that also carry Discipline + Activity + a numeric Progress
+ * additionally yield a status update.
+ */
+export function parseProjectCsv(text: string): ParsedProjectCsv {
+  const rows = parseCsv(text);
+  const out: ParsedProjectCsv = { structure: {}, updates: [] };
+  if (!rows.length) return out;
+
+  // Header detection / column mapping
+  let start = 0;
+  const idx: Record<string, number> = {};
+  const first = rows[0].map(c => c.trim().toLowerCase());
+  if (first[0] === 'building') {
+    start = 1;
+    first.forEach((h, i) => { idx[h] = i; });
+  } else {
+    ['building', 'floor', 'room', 'discipline', 'activity', 'progress', 'status', 'remarks']
+      .forEach((h, i) => { idx[h] = i; });
+  }
+  const col = (r: string[], key: string) => (idx[key] != null ? (r[idx[key]] ?? '').trim() : '');
+
+  for (let i = start; i < rows.length; i++) {
+    const r = rows[i];
+    const building = col(r, 'building');
+    const floor = col(r, 'floor');
+    const room = col(r, 'room');
     if (!building || !floor || !room) continue;
-    if (i === 0 && /^building$/i.test(building)) continue; // header row
-    (out[building] ??= {})[floor] ??= [];
-    if (!out[building][floor].includes(room)) out[building][floor].push(room);
+
+    (out.structure[building] ??= {})[floor] ??= [];
+    if (!out.structure[building][floor].includes(room)) out.structure[building][floor].push(room);
+
+    const discipline = col(r, 'discipline');
+    const activity = col(r, 'activity');
+    const progressRaw = col(r, 'progress');
+    if (discipline && activity && progressRaw !== '') {
+      const progress = Math.max(0, Math.min(100, Math.round(Number(progressRaw))));
+      if (!Number.isNaN(progress)) {
+        out.updates.push({
+          building, floor, room, discipline, activity,
+          progress, status: col(r, 'status'), remarks: col(r, 'remarks'),
+        });
+      }
+    }
   }
   return out;
+}
+
+/** A dedicated, non-login engineer that owns rows created by CSV import. */
+export async function getImportEngineerId(): Promise<number> {
+  const { rows } = await rawQuery("SELECT id FROM engineers WHERE name = 'CSV Import'");
+  if (rows.length) return rows[0].id;
+
+  const hash = bcrypt.hashSync(`import-${Date.now()}-${Math.random()}`, 10);
+  const { rows: ins } = await rawQuery(
+    "INSERT INTO engineers (name, password, initials, avatar_color) VALUES ('CSV Import', $1, 'IM', '#64748B') RETURNING id",
+    [hash]
+  );
+  const id = ins[0].id;
+  const { rows: discs } = await rawQuery('SELECT id FROM disciplines');
+  for (const d of discs) {
+    await rawQuery(
+      'INSERT INTO engineer_disciplines (engineer_id, discipline_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [id, d.id]
+    );
+  }
+  return id;
+}
+
+export interface UpdatesImportResult {
+  updatesAdded: number;
+  updatesSkipped: number;
+}
+
+/** Resolve names -> ids within one project and append update rows. */
+export async function applyImportedUpdates(
+  projectId: number,
+  updates: ParsedUpdate[]
+): Promise<UpdatesImportResult> {
+  const res: UpdatesImportResult = { updatesAdded: 0, updatesSkipped: 0 };
+  if (!updates.length) return res;
+
+  const engineerId = await getImportEngineerId();
+
+  for (const u of updates) {
+    const { rows } = await rawQuery(
+      `SELECT b.id AS building_id, f.id AS floor_id, r.id AS room_id,
+              d.id AS discipline_id, a.id AS activity_id
+       FROM buildings b
+       JOIN floors f  ON f.building_id = b.id AND f.name = $3
+       JOIN rooms  r  ON r.floor_id = f.id   AND r.name = $4
+       JOIN disciplines d ON lower(d.name) = lower($5)
+       JOIN activities  a ON a.discipline_id = d.id AND lower(a.name) = lower($6)
+       WHERE b.project_id = $1 AND b.name = $2
+       LIMIT 1`,
+      [projectId, u.building, u.floor, u.room, u.discipline, u.activity]
+    );
+    if (!rows.length) { res.updatesSkipped++; continue; }
+
+    const { building_id, floor_id, room_id, discipline_id, activity_id } = rows[0];
+    const status = deriveStatus(u.progress, u.status);
+    await rawQuery(
+      `INSERT INTO updates
+         (engineer_id, project_id, building_id, floor_id, room_id, discipline_id, activity_id, status, progress, remarks)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [engineerId, projectId, building_id, floor_id, room_id, discipline_id, activity_id,
+       status, u.progress, u.remarks || '']
+    );
+    res.updatesAdded++;
+  }
+  return res;
 }

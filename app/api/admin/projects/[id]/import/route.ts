@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminToken } from '@/lib/auth';
-import { query, parseRoomCsv, importRoomStructure } from '@/lib/db';
+import { query, parseProjectCsv, importRoomStructure, applyImportedUpdates } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST a "Building,Floor,Room" CSV to populate a project's room structure.
- * Body is the raw CSV text (Content-Type text/csv or text/plain), or multipart
- * form-data with a `file` field. Re-runnable — only missing rows are added.
+ * POST an exported project CSV to (re)populate a project.
+ * Columns: Building,Floor,Room[,Discipline,Activity,Progress,Status,Remarks].
+ * - Building/Floor/Room always upsert the room structure (only missing rows added).
+ * - Rows that also carry Discipline + Activity + Progress append a status update.
+ * Body is raw CSV text, or multipart form-data with a `file` field.
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   if (!(await verifyAdminToken())) {
@@ -37,18 +39,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Empty CSV' }, { status: 400 });
   }
 
-  const structure = parseRoomCsv(csv);
-  const buildingCount = Object.keys(structure).length;
-  if (buildingCount === 0) {
+  const { structure, updates } = parseProjectCsv(csv);
+  if (Object.keys(structure).length === 0) {
     return NextResponse.json(
-      { error: 'No valid rows. Expected "Building,Floor,Room" columns.' },
+      { error: 'No valid rows. Expected at least Building,Floor,Room columns.' },
       { status: 400 }
     );
   }
 
   try {
-    const result = await importRoomStructure(projectId, structure);
-    return NextResponse.json({ success: true, ...result });
+    const s = await importRoomStructure(projectId, structure);
+    const u = await applyImportedUpdates(projectId, updates);
+    return NextResponse.json({ success: true, ...s, ...u });
   } catch (err) {
     console.error('CSV import failed:', err);
     return NextResponse.json({ error: 'Import failed' }, { status: 500 });
